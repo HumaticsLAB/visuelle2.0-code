@@ -31,7 +31,8 @@ unset INSTALL_DIR
 ## Run Naive and Simple Exponential Smoothing baselines
 
 ```bash
-python forecast_stat.py 
+python forecast_stat.py --method naive # Naive Method
+python forecast_stat.py --method ses # Simple Exponential Smoothing Method
 ```
 ## Run SO-fore2−10
 
