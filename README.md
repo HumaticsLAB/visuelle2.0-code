@@ -21,13 +21,12 @@ export INSTALL_DIR=$PWD
 cd $INSTALL_DIR
 git clone https://github.com/HumaticsLAB/visuelle2.0-code.git
 cd visuelle2.0-code
-mkdir dataset
 
 unset INSTALL_DIR
 ```
 ## Dataset
 
-**VISUELLE2** dataset is publicly available to download [here](https://forms.gle/8Sk431AsEgCot9Kv5). Please download and extract it inside the dataset folder. A more accurate description of the dataset inside its [official page](https://humaticslab.github.io/forecasting/visuelle).  
+**VISUELLE2** dataset is publicly available to download [here](https://forms.gle/8Sk431AsEgCot9Kv5). Please download and extract it inside the root folder. A more accurate description of the dataset inside its [official page](https://humaticslab.github.io/forecasting/visuelle).  
 
 ## Run Naive and Simple Exponential Smoothing baselines
 
