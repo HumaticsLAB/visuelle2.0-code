@@ -19,8 +19,8 @@ pip install torch torchvision
 export INSTALL_DIR=$PWD
 
 cd $INSTALL_DIR
-git clone https://github.com/HumaticsLAB/AttentionBasedMultiModalRNN.git
-cd AttentionBasedMultiModalRNN
+git clone https://github.com/HumaticsLAB/visuelle2.0-code.git
+cd visuelle2.0-code
 mkdir dataset
 
 unset INSTALL_DIR
