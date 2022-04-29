@@ -2,6 +2,9 @@
 
 The official pytorch implementation of models discussed in [The multi-modal universe of fast-fashion: the Visuelle 2.0 benchmark](https://arxiv.org/abs/2204.06972v1)
 paper.
+
+Accepted at the 5th Workshop on Computer Vision for Fashion, Art, and Design @ CVPR22
+
 ## Installation
 
 We suggest the use of VirtualEnv.
@@ -49,4 +52,20 @@ python forecast_dl.py --task_mode 1 --ckpt_path <ckpt_path>
 ```bash
 python train_dl.py --new_product 1
 python forecast_dl.py --new_product 1 --ckpt_path <ckpt_path>
+```
+
+## Citation
+If you use **VISUELLE2** dataset or this paper implementation, please cite the following papers.
+
+```
+@misc{https://doi.org/10.48550/arxiv.2204.06972,
+  doi = {10.48550/ARXIV.2204.06972},
+  url = {https://arxiv.org/abs/2204.06972},
+  author = {Skenderi, Geri and Joppi, Christian and Denitto, Matteo and Scarpa, Berniero and Cristani, Marco},
+  keywords = {Computer Vision and Pattern Recognition (cs.CV), Machine Learning (cs.LG), FOS: Computer and information sciences, FOS: Computer and information sciences},
+  title = {The multi-modal universe of fast-fashion: the Visuelle 2.0 benchmark},
+  publisher = {arXiv},
+  year = {2022},
+  copyright = {Creative Commons Attribution Non Commercial Share Alike 4.0 International}
+}
 ```
