@@ -3,7 +3,7 @@
 The official pytorch implementation of models discussed in [The multi-modal universe of fast-fashion: the Visuelle 2.0 benchmark](https://arxiv.org/abs/2204.06972v1)
 paper.
 
-Accepted at the 5th Workshop on Computer Vision for Fashion, Art, and Design @ CVPR22
+Accepted as oral at the 5th Workshop on Computer Vision for Fashion, Art, and Design @ CVPR22
 
 ## Installation
 
