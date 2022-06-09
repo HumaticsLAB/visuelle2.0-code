@@ -66,6 +66,6 @@ If you use **VISUELLE2** dataset or this paper implementation, please cite the f
 @inproceedings{skenderi2022multi,
   title={The multi-modal universe of fast-fashion: the Visuelle 2.0 benchmark},
   author={Skenderi, Geri and Joppi, Christian and Denitto, Matteo and Scarpa, Berniero and Cristani, Marco},
-  booktitle={Proceedings of the IEEE/CVF International Conference on Computer Vision},
+  booktitle={Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition 2022},
 }
 ```
