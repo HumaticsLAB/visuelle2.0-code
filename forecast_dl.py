@@ -5,7 +5,7 @@ import pandas as pd
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 import numpy as np
-from models import CrossAttnRNN
+from models import CrossAttnRNN, CrossAttnRNNZero
 from dataset import Visuelle2
 from tqdm import tqdm
 from utils import calc_error_metrics
@@ -62,21 +62,40 @@ def run(args):
     # ####################################### Train and eval model #######################################
     # Load model
     model_savename = args.ckpt_path
-    model = CrossAttnRNN.CrossAttnRNN(
-        attention_dim=args.attention_dim,
-        embedding_dim=args.embedding_dim,
-        hidden_dim=args.hidden_dim,
-        cat_dict=cat_dict, 
-        col_dict=col_dict, 
-        fab_dict=fab_dict,
-        store_num=125, #This represents the maximum encoded value of the store id, the actuall nr of stores available in the dataset is 110, but this is needed for the nn.Embedding layer to work
-        use_img=bool(args.use_img), 
-        use_att=bool(args.use_att), 
-        use_date=bool(args.use_date),
-        use_trends=bool(args.use_trends),
-        task_mode=int(args.task_mode),
-        out_len=10
-    ).load_from_checkpoint(model_savename)
+    if demand:
+        model = CrossAttnRNNZero.CrossAttnRNN(
+            attention_dim=args.attention_dim,
+            embedding_dim=args.embedding_dim,
+            hidden_dim=args.hidden_dim,
+            num_trends=args.num_trends,
+            cat_dict=cat_dict, 
+            col_dict=col_dict, 
+            fab_dict=fab_dict,
+            store_num=125, #This represents the maximum encoded value of the store id, the actuall nr of stores available in the dataset is 110, but this is needed for the nn.Embedding layer to work
+            use_img=bool(args.use_img), 
+            use_att=bool(args.use_att), 
+            use_date=bool(args.use_date),
+            use_trends=bool(args.use_trends),
+            out_len=12
+        ).load_from_checkpoint(model_savename)
+    else:
+        model = CrossAttnRNN.CrossAttnRNN(
+            attention_dim=args.attention_dim,
+            embedding_dim=args.embedding_dim,
+            hidden_dim=args.hidden_dim,
+            cat_dict=cat_dict, 
+            col_dict=col_dict, 
+            fab_dict=fab_dict,
+            store_num=125, #This represents the maximum encoded value of the store id, the actuall nr of stores available in the dataset is 110, but this is needed for the nn.Embedding layer to work
+            use_img=bool(args.use_img), 
+            use_att=bool(args.use_att), 
+            use_date=bool(args.use_date),
+            use_trends=bool(args.use_trends),
+            task_mode = int(args.task_mode),
+            out_len=10
+        ).load_from_checkpoint(model_savename) 
+        
+
     model.to('cuda:'+args.gpu_num) 
 
     gt, forecasts = [], []
