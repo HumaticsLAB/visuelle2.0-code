@@ -40,8 +40,12 @@ def run(args):
 
     demand = bool(args.new_product)
     img_folder = os.path.join(args.dataset_path, 'images')
-    visuelle_pt_train = "visuelle2_train_processed_demand.pt" if demand else "visuelle2_train_processed_stfore_2.pt"
-    visuelle_pt_test = "visuelle2_test_processed_demand.pt" if demand else "visuelle2_test_processed_stfore_2.pt"
+    if demand:
+        visuelle_pt_train = "visuelle2_train_processed_demand.pt"  
+        visuelle_pt_test = "visuelle2_test_processed_demand.pt"  
+    else:
+        visuelle_pt_train = "visuelle2_train_processed_stfore.pt"
+        visuelle_pt_test = "visuelle2_test_processed_stfore.pt"
 
     # Create (PyTorch) dataset objects
     trainset = Visuelle2(
@@ -68,8 +72,8 @@ def run(args):
     )
 
     # # If you wish to debug with less data you can use this syntax
-    # trainset = torch.utils.data.Subset(trainset, list(range(1000)))
-    # testset = torch.utils.data.Subset(testset, list(range(1000)))
+    trainset = torch.utils.data.Subset(trainset, list(range(1000)))
+    testset = torch.utils.data.Subset(testset, list(range(1000)))
 
     trainloader = DataLoader(
         trainset, batch_size=args.batch_size, shuffle=True, num_workers=2
@@ -150,7 +154,7 @@ def run(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset_path", type=str, default='visuelle2/')
+    parser.add_argument("--dataset_path", type=str, default='/media/data/gskenderi/visuelle2/')
     parser.add_argument("--seed", type=int, default=21)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--new_product", type=int, default=0,
@@ -169,16 +173,15 @@ if __name__ == "__main__":
     parser.add_argument("--use_att", type=int, default=0)
     parser.add_argument("--use_date", type=int, default=0)
     parser.add_argument("--use_trends", type=int, default=0)
-    parser.add_argument("--task_mode", type=int, default=1, help="0-->2,1 - 1-->2,10")
+    parser.add_argument("--task_mode", type=int, default=0, help="0-->2,1 - 1-->2,10")
     parser.add_argument("--epochs", type=int, default=30)
-    parser.add_argument("--gpu_num", type=int, default=2)
+    parser.add_argument("--gpu_num", type=int, default=0)
 
     # wandb arguments
     parser.add_argument("--use_wandb", type=bool, default=False)
     parser.add_argument("--wandb_entity", type=str, default="")
     parser.add_argument("--wandb_project", type=str, default="")
     parser.add_argument("--wandb_run", type=str, default="")
-
     parser.add_argument("--ckpt_dir", type=str, default="ckpt/")
 
     

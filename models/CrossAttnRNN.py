@@ -6,21 +6,21 @@ import torchvision.models as models
 from fairseq.optim.adafactor import Adafactor
 
 
-class TSEmbedder(nn.Module):
-    def __init__(self, input_dim, embedding_dim):
-        super(TSEmbedder, self).__init__()
-        self.ts_embedder = nn.GRU(
-            input_size=input_dim,
-            hidden_size=embedding_dim,
-            num_layers=1,
-            batch_first=True,
-        )
-        self.dropout = nn.Dropout(0.1)
+# class TSEmbedder(nn.Module):
+#     def __init__(self, input_dim, embedding_dim):
+#         super(TSEmbedder, self).__init__()
+#         self.ts_embedder = nn.GRU(
+#             input_size=input_dim,
+#             hidden_size=embedding_dim,
+#             num_layers=1,
+#             batch_first=True,
+#         )
+#         self.dropout = nn.Dropout(0.1)
 
-    def forward(self, x):
-        x = self.dropout(self.ts_embedder(x)[0])
+#     def forward(self, x):
+#         x = self.dropout(self.ts_embedder(x)[0])
 
-        return x
+#         return x
 
 
 class AttributeEncoder(nn.Module):
@@ -180,12 +180,19 @@ class CrossAttnRNN(pl.LightningModule):
         self.ts_self_attention = nn.MultiheadAttention(
             embed_dim=out_len, num_heads=1, dropout=0.1
         )
-        self.ts_attn_lin = nn.Linear(out_len, embedding_dim)
+        ts_lin_dim = 1 if task_mode != 0 else out_len
+        self.ts_attn_lin = nn.Linear(ts_lin_dim, embedding_dim)
         self.ts_attention = AdditiveAttention(embedding_dim, hidden_dim, attention_dim)
         if self.use_trends:
-            self.ts_embedder = nn.Linear(embedding_dim * (156+(12-out_len)), embedding_dim)
+            if self.task_mode == 0:
+                pass
+            else:
+                self.ts_embedder = nn.Linear(embedding_dim * (156+(12-out_len)), embedding_dim)
         else:
-            self.ts_embedder = nn.Linear(embedding_dim * (12-out_len), embedding_dim)
+            if self.task_mode == 0:
+                pass
+            else:
+                self.ts_embedder = nn.Linear(embedding_dim * (12-out_len), embedding_dim)
 
         
         self.img_attention = AdditiveAttention(embedding_dim, hidden_dim, attention_dim)
@@ -193,7 +200,7 @@ class CrossAttnRNN(pl.LightningModule):
         self.multimodal_embedder = nn.Linear(embedding_dim, embedding_dim)
 
         # Decoder
-        self.decoder = nn.GRU(
+        self.decoder = nn.GRU( # TO-DO: Full check on task modes
             input_size=embedding_dim + (2 if self.task_mode == 0 else 1),
             hidden_size=hidden_dim,
             num_layers=1,
@@ -230,6 +237,25 @@ class CrossAttnRNN(pl.LightningModule):
             flatten_exo, X.shape[1], dim=-1
         )  # Repeat the above series N times
 
+        # Predictions vector (will contain all forecasts)
+        outputs = torch.zeros(bs, self.out_len, 1).to(self.device)
+
+        # Save attention weights
+        img_attn_weights, multimodal_attn_weights = [], []
+
+        # Init initial decoder status
+        decoder_hidden = torch.zeros(1, bs, self.hidden_dim).to(self.device)
+        
+        # Image attention
+        attended_img_encoding, img_alpha = self.img_attention(
+            img_encoding, decoder_hidden
+        )
+        img_attn_weights.append(img_alpha)
+
+        # Reduce image features into one via summing
+        attended_img_encoding = attended_img_encoding.sum(1)
+
+        # Temporal data
         # Decide to use exogenous series or not
         if self.use_trends:
             ts_input = torch.cat(
@@ -244,31 +270,19 @@ class CrossAttnRNN(pl.LightningModule):
             ts_input.permute(1, 0, 2),
             ts_input.permute(1, 0, 2),
         )
-
-        # Predictions vector (will contain all forecasts)
-        outputs = torch.zeros(bs, self.out_len, 1).to(self.device)
-
-        # Save attention weights
-        img_attn_weights, multimodal_attn_weights = [], []
-
-        # Init initial decoder status
-        decoder_hidden = torch.zeros(1, bs, self.hidden_dim).to(self.device)
         
-        if self.task_mode == 0:
-            # Image attention
-            attended_img_encoding, img_alpha = self.img_attention(
-                img_encoding, decoder_hidden
-            )
+        if self.task_mode != 0: # Only the first window is selected for successive autoregressive forecasts
+            self_attended_temporal_encoding = self_attended_temporal_encoding[:, :, 0].unsqueeze(-1)
 
-            # Reduce image features into one via summing
-            attended_img_encoding = attended_img_encoding.sum(1)
+        attended_ts_encoding, ts_alpha = self.ts_attention(
+            self.ts_attn_lin(self_attended_temporal_encoding).permute(1,0,2), decoder_hidden
+        )
 
-            # Temporal Attention
-            attended_ts_encoding, ts_alpha = self.ts_attention(
-                self.ts_attn_lin(self_attended_temporal_encoding).permute(1,0,2), decoder_hidden
-            )
 
+        if self.task_mode == 0: # 2-1 Multiple predictions for each 2 step embedding
             # Build multimodal input based on specified input modalities
+
+            # TODO: How to correctly mix the embeddings for 2-10? 
             ts_encoding = self.ts_embedder(attended_ts_encoding.view(bs, -1))
             mm_in = ts_encoding.unsqueeze(0)
             if self.use_img:
@@ -302,39 +316,24 @@ class CrossAttnRNN(pl.LightningModule):
             outputs = self.decoder_fc(decoder_out)
 
         else:
+            # Build multimodal input based on specified input modalities
+            ts_encoding = self.ts_embedder(attended_ts_encoding.view(bs, -1))
+            mm_in = ts_encoding.unsqueeze(0)
+            if self.use_img:
+                mm_in = torch.cat([mm_in, attended_img_encoding.unsqueeze(0)])
+            if self.use_att:
+                mm_in = torch.cat([mm_in, attribute_encoding.unsqueeze(0)])
+            if self.use_date:
+                mm_in = torch.cat([mm_in, dummy_encoding.unsqueeze(0)])
+            mm_in = mm_in.permute(1, 0, 2)
+
+            # Autoregressive rolling forecasts
             decoder_output = torch.zeros(bs, 1, 1).to(self.device)
             for t in range(self.out_len):
-                # Image attention
-                attended_img_encoding, img_alpha = self.img_attention(
-                    img_encoding, decoder_hidden
-                )
-
-                # Reduce image features into one via summing
-                attended_img_encoding = attended_img_encoding.sum(1)
-
-                # Temporal Attention
-                attended_ts_encoding, ts_alpha = self.ts_attention(
-                    self.ts_attn_lin(self_attended_temporal_encoding).permute(1,0,2), decoder_hidden
-                )
-
-                # Build multimodal input based on specified input modalities
-                ts_encoding = self.ts_embedder(attended_ts_encoding.view(bs, -1))
-                mm_in = ts_encoding.unsqueeze(0)
-                if self.use_img:
-                    mm_in = torch.cat([mm_in, attended_img_encoding.unsqueeze(0)])
-                if self.use_att:
-                    mm_in = torch.cat([mm_in, attribute_encoding.unsqueeze(0)])
-                if self.use_date:
-                    mm_in = torch.cat([mm_in, dummy_encoding.unsqueeze(0)])
-                mm_in = mm_in.permute(1, 0, 2)
-                
                 # Multimodal attention
                 attended_multimodal_encoding, multimodal_alpha = self.multimodal_attention(
                     mm_in, decoder_hidden
                 )
-
-                # Save alphas
-                img_attn_weights.append(img_alpha)
                 multimodal_attn_weights.append(multimodal_alpha)
 
                 # Reduce (residual) attention weighted multimodal input via summation and then embed

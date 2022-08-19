@@ -35,9 +35,8 @@ def run(args):
         os.path.join(args.dataset_path, "vis2_gtrends_data.csv"), index_col=[0], parse_dates=True
     )
 
-    demand = False # Can't do demand forecasting of new products with these methods
     img_folder = os.path.join(args.dataset_path, 'images')
-    visuelle_pt_test = "visuelle2_test_processed_stfore_2.pt"
+    visuelle_pt_test = "visuelle2_test_processed_stfore.pt"
 
     # Create (PyTorch) dataset objects
     testset = Visuelle2(
@@ -48,7 +47,7 @@ def run(args):
         col_dict,
         fab_dict,
         args.trend_len,
-        demand,
+        demand=False, # Can't do demand forecasting of new products with these methods,
         local_savepath=os.path.join(args.dataset_path, visuelle_pt_test)
     )
 
@@ -58,7 +57,7 @@ def run(args):
     testloader = DataLoader(
         testset, batch_size=args.batch_size, shuffle=False, num_workers=0
     )
-
+    
     print("Test batches:", len(testloader))
 
     # ####################################### Run model #######################################
@@ -89,7 +88,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     # General arguments
-    parser.add_argument("--dataset_path", type=str, default='visuelle2final/')
+    parser.add_argument("--dataset_path", type=str, default='/media/data/gskenderi/visuelle2/')
     parser.add_argument("--seed", type=int, default=21)
     parser.add_argument("--method", type=str, default="naive")
     parser.add_argument("--use_teacher_forcing", type=int, default=1)
