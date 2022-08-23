@@ -5,7 +5,7 @@ import pandas as pd
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 import numpy as np
-from models import CrossAttnRNN, CrossAttnRNNZero
+from models import CrossAttnRNN210, CrossAttnRNNDemand
 from dataset import Visuelle2
 from tqdm import tqdm
 from utils import calc_error_metrics
@@ -63,7 +63,7 @@ def run(args):
     # Load model
     model_savename = args.ckpt_path
     if demand:
-        model = CrossAttnRNNZero.CrossAttnRNN(
+        model = CrossAttnRNNDemand.CrossAttnRNN(
             attention_dim=args.attention_dim,
             embedding_dim=args.embedding_dim,
             hidden_dim=args.hidden_dim,
@@ -79,7 +79,7 @@ def run(args):
             out_len=12
         ).load_from_checkpoint(model_savename)
     else:
-        model = CrossAttnRNN.CrossAttnRNN(
+        model = CrossAttnRNN210.CrossAttnRNN(
             attention_dim=args.attention_dim,
             embedding_dim=args.embedding_dim,
             hidden_dim=args.hidden_dim,
