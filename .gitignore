@@ -2,3 +2,4 @@ mmrnn_venv/
 __pycache__/
 ckpt/
 wandb/
+.vscode/

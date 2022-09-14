@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 from pytorch_lightning import loggers as pl_loggers
 from datetime import datetime
-from models import CrossAttnRNN210, CrossAttnRNN21, CrossAttnRNNDemand
+from models import CrossAttnRNN210, CrossAttnRNN21, CrossAttnRNNDemand, simple_210
 from dataset import Visuelle2
 import numpy as np
 
@@ -122,7 +122,7 @@ def run(args):
                 out_len=10
             ) 
         else:
-            model = CrossAttnRNN210.CrossAttnRNN(
+            model = simple_210.CrossAttnRNN(
                 attention_dim=args.attention_dim,
                 embedding_dim=args.embedding_dim,
                 hidden_dim=args.hidden_dim,
@@ -174,25 +174,25 @@ if __name__ == "__main__":
     parser.add_argument("--dataset_path", type=str, default='/media/data/gskenderi/visuelle2/')
     parser.add_argument("--seed", type=int, default=21)
     parser.add_argument("--batch_size", type=int, default=128)
-    parser.add_argument("--demand", type=int, default=1,
+    parser.add_argument("--demand", type=int, default=0,
     help="Boolean variable to optionally use the dataset for the new product demand forecasting task (forecasting without a known past)")
     
      # Model specific arguments
     parser.add_argument("--model_type", type=str, default="RNN")
     parser.add_argument("--trend_len", type=int, default=52)
     parser.add_argument("--num_trends", type=int, default=3)
-    parser.add_argument("--embedding_dim", type=int, default=300)
-    parser.add_argument("--attention_dim", type=int, default=300)
-    parser.add_argument("--hidden_dim", type=int, default=300)
+    parser.add_argument("--embedding_dim", type=int, default=256)
+    parser.add_argument("--attention_dim", type=int, default=256)
+    parser.add_argument("--hidden_dim", type=int, default=256)
     parser.add_argument("--output_dim", type=int, default=9)
     parser.add_argument("--num_hidden_layers", type=int, default=1)
     parser.add_argument("--use_img", type=int, default=1)
     parser.add_argument("--use_att", type=int, default=0)
     parser.add_argument("--use_date", type=int, default=0)
     parser.add_argument("--use_trends", type=int, default=0)
-    parser.add_argument("--task_mode", type=int, default=0, help="0-->2,1 - 1-->2,10")
+    parser.add_argument("--task_mode", type=int, default=1, help="0-->2,1 - 1-->2,10")
     parser.add_argument("--epochs", type=int, default=50)
-    parser.add_argument("--gpu_num", type=int, default=0)
+    parser.add_argument("--gpu_num", type=int, default=1)
 
     # wandb arguments
     parser.add_argument("--use_wandb", action='store_true')

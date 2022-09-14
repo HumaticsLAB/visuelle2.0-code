@@ -61,7 +61,7 @@ class Visuelle2:
 
         return self.dataset[idx], pt_img
 
-    def frame_series(self, train_window=2, forecast_horizon=1):
+    def frame_series(self, train_window=3, forecast_horizon=1):
         X, y = [], []
         sales_and_restocks = self.sales_df.copy(deep=True).iloc[:, -13:]
         restocks, sales = (

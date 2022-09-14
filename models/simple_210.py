@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
-import torchvision.models as models
 from fairseq.optim.adafactor import Adafactor
 from models.modules import AdditiveAttention, ImageEncoder, AttributeEncoder, TemporalFeatureEncoder
 
@@ -38,17 +37,20 @@ class CrossAttnRNN(pl.LightningModule):
 
         # Encoder(s)
         self.image_encoder = ImageEncoder(embedding_dim)
-        self.ts_embedder = nn.GRU(1, embedding_dim, dropout=0.2, batch_first=True)
-
+        self.warmup_rnn = nn.GRU(embedding_dim+1, embedding_dim, dropout=0.1, batch_first=True)
+        
         # Attention modules
         self.img_attention = AdditiveAttention(embedding_dim, hidden_dim, attention_dim)
+        self.multimodal_attention = AdditiveAttention(embedding_dim, hidden_dim, attention_dim)
+        self.multimodal_embedder = nn.Linear(embedding_dim, embedding_dim)
 
         # Decoder
-        self.decoder = nn.Sequential(
-            nn.Linear(embedding_dim*2, hidden_dim),
+        self.rnn_cell = nn.GRUCell(embedding_dim+1, hidden_dim)
+        self.decoder_fc = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim//2),
             nn.ReLU(),
             nn.Dropout(0.2),
-            nn.Linear(hidden_dim, 1)
+            nn.Linear(hidden_dim//2, 1)
         )
 
         self.save_hyperparameters()
@@ -65,31 +67,78 @@ class CrossAttnRNN(pl.LightningModule):
         gtrends,
         images,
     ):
-        bs, num_ts_splits, timesteps = X.shape[0], X.shape[1], X.shape[2]
+        bs = X.shape[0]
+        img_attn_weights, multimodal_attn_weights = [], [] # Lists to save attention weights
 
         # Encode static input data
         img_encoding = self.image_encoder(images)
 
-        # Temporal data
-        ts_input = X.reshape((bs*num_ts_splits, timesteps)).unsqueeze(-1) # Collapse values to make 2-1 (single) predictions for each 2 step embedding
-        _, ts_embedding = self.ts_embedder(ts_input) # Project ts to higher dim space by preserving temporal order 
+        # Store predictions of dynamically unrolled outputs.
+        predictions = []
+        mm_embeddings = []
 
-        mm_in = ts_embedding.squeeze() 
-        if self.use_img:
-            img_encoding = img_encoding.repeat_interleave(num_ts_splits, dim=0)
+        # Decoder warm-up/init (first prediction of autoregression)
+        start_tokens = X[:, 0, :].unsqueeze(-1) # Only the first window is selected for successive autoregressive forecasts
+        img_encoding = img_encoding.mean(1).unsqueeze(1).repeat_interleave(start_tokens.shape[1], dim=1)
+        warmup_in = torch.cat([img_encoding, start_tokens], dim=-1)
+        warmup_out, decoder_hidden = self.warmup_rnn(warmup_in)
+        decoder_hidden = decoder_hidden.squeeze()
+        ts_embedding = warmup_out.mean(1)
 
-            # Image attention over the temporal embedding
-            attended_img_encoding, _ = self.img_attention(
-                img_encoding, ts_embedding
+        # Insert the first prediction and multi-modal attention result.
+        pred = self.decoder_fc(decoder_hidden).squeeze(0)
+        predictions.append(pred)
+
+        # Autoregressive rolling forecasts
+        for t in range(1, self.out_len):
+            # Image attention
+            if self.use_img:
+                attended_img_encoding, img_alpha = self.img_attention(
+                    img_encoding, decoder_hidden
+                )
+                # Reduce image features into one via summing
+                img_attn_weights.append(img_alpha)
+                attended_img_encoding = F.dropout(attended_img_encoding, p=0.1, training=self.training) 
+                attended_img_encoding = attended_img_encoding.sum(1)
+
+            # Build multimodal input based on specified input modalities
+            mm_in = ts_embedding.unsqueeze(0)
+            if self.use_img:
+                mm_in = torch.cat([mm_in, attended_img_encoding.unsqueeze(0)])
+            mm_in = mm_in.permute(1, 0, 2)
+            
+            # Multimodal attention
+            attended_multimodal_encoding, multimodal_alpha = self.multimodal_attention(
+                mm_in, decoder_hidden  # Change mm embedding to BS x len x D for attention layer
             )
-            attended_img_encoding = attended_img_encoding.sum(1) # Reduce image features by summing over the attention weighted encoding
-            attended_img_encoding = F.dropout(attended_img_encoding, p=0.2, training=self.training) 
-            mm_in = torch.cat([mm_in, attended_img_encoding], dim=1)
+            multimodal_attn_weights.append(multimodal_alpha)
+            attended_multimodal_encoding = F.dropout(attended_multimodal_encoding, p=0.1, training=self.training)
 
-        outputs = self.decoder(mm_in)
-        outputs = outputs.reshape(bs, num_ts_splits, -1) # Produce in outputs in the form of BS X Num_predictions X 1
+            final_mm_embedding = mm_in + attended_multimodal_encoding  # residual learning
+            final_mm_embedding = self.multimodal_embedder(final_mm_embedding.sum(1))  # BS X D
 
-        return outputs, [], []
+            # Update hidden state for sequential predictions
+            decoder_hidden = decoder_hidden + final_mm_embedding # Condition hidden state
+
+            # Use the last prediction as input for the current step.
+            step_in = torch.cat([final_mm_embedding, pred], dim=-1)
+            decoder_hidden = self.rnn_cell(step_in, decoder_hidden)
+
+            # Make new prediction
+            pred = self.decoder_fc(decoder_hidden).squeeze(0)
+
+            # Control teacher forcing
+            if self.use_teacher_forcing:
+                teach_forcing_prob = True if torch.rand(1) < self.teacher_forcing_ratio else False
+                if teach_forcing_prob and y is not None:
+                    pred = y[:, t, :]
+            
+            predictions.append(pred)
+
+        # Convert the RNN outputs to a prediction tensor.
+        outputs = torch.stack(predictions).permute(1,0,2)
+
+        return outputs, img_attn_weights, multimodal_attn_weights
 
     def configure_optimizers(self):
         optimizer = Adafactor(
