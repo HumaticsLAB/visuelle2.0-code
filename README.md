@@ -42,17 +42,20 @@ python forecast_stat.py --method naive --use_teacher_forcing 0  #SO-fore2−10
 python forecast_stat.py --method ses --use_teacher_forcing 1  #SO-fore2−1
 python forecast_stat.py --method ses --use_teacher_forcing 0  #SO-fore2−10
 ```
-## Run SO-fore2−10
 
+## Run SO-fore2−1
 ```bash
 python train_dl.py --task_mode 0
 python forecast_dl.py --task_mode 0 --ckpt_path <ckpt_path>
 ```
-## Run SO-fore2−1
+
+## Run SO-fore2−10
+
 ```bash
 python train_dl.py --task_mode 1
 python forecast_dl.py --task_mode 1 --ckpt_path <ckpt_path>
 ```
+
 ## Run Demand SO-fore
 ```bash
 python train_dl.py --new_product 1
