@@ -6,9 +6,11 @@ import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 from pytorch_lightning import loggers as pl_loggers
 from datetime import datetime
-from models import CrossAttnRNN210, CrossAttnRNN21, CrossAttnRNNDemand, simple_210
+
 from dataset import Visuelle2
-import numpy as np
+from models.CrossAttnRNN21 import CrossAttnRNN as Model21
+from models.CrossAttnRNN210 import CrossAttnRNN as Model210
+from models.CrossAttnRNNDemand import CrossAttnRNN as DemandModel
 
 def run(args):
     print(args)
@@ -49,31 +51,32 @@ def run(args):
 
     # Create (PyTorch) dataset objects
     trainset = Visuelle2(
-        train_df,
-        img_folder,
-        gtrends,
-        cat_dict,
-        col_dict,
-        fab_dict,
-        args.trend_len,
-        demand,
+        sales_df=train_df,
+        img_root=img_folder,
+        gtrends=gtrends,
+        cat_dict=cat_dict,
+        col_dict=col_dict,
+        fab_dict=fab_dict,
+        trend_len=52,        
+        demand=demand,
         local_savepath=os.path.join(args.dataset_path, visuelle_pt_train)
     )
     testset = Visuelle2(
-        test_df,
-        img_folder,
-        gtrends,
-        cat_dict,
-        col_dict,
-        fab_dict,
-        args.trend_len,
-        demand,
+        sales_df=test_df,
+        img_root=img_folder,
+        gtrends=gtrends,
+        cat_dict=cat_dict,
+        col_dict=col_dict,
+        fab_dict=fab_dict,
+        trend_len=52,        
+        demand=demand,
         local_savepath=os.path.join(args.dataset_path, visuelle_pt_test)
     )
 
-    # # If you wish to debug with less data you can use this syntax
-    # trainset = torch.utils.data.Subset(trainset, list(range(1000)))
-    # testset = torch.utils.data.Subset(testset, list(range(1000)))
+    # If you wish to debug with less data you can use this
+    if args.quick_debug:
+        trainset = torch.utils.data.Subset(trainset, list(range(1000)))
+        testset = torch.utils.data.Subset(testset, list(range(1000)))
 
     trainloader = DataLoader(
         trainset, batch_size=args.batch_size, shuffle=True, num_workers=6
@@ -83,66 +86,45 @@ def run(args):
         testset, batch_size=args.batch_size, shuffle=False, num_workers=4
     )
 
-    print(f"Train batches: {len(trainloader)}, test batches: {len(testloader)}")
+    print(f"Completed dataset loading procedure. Train batches: {len(trainloader)}, test batches: {len(testloader)}")
 
     # ####################################### Train and eval model #######################################
-    # Create model
     model = None
     if demand:
-        model = CrossAttnRNNDemand.CrossAttnRNN(
+        model = DemandModel(
             attention_dim=args.attention_dim,
             embedding_dim=args.embedding_dim,
             hidden_dim=args.hidden_dim,
-            num_trends=args.num_trends,
-            cat_dict=cat_dict, 
-            col_dict=col_dict, 
-            fab_dict=fab_dict,
-            store_num=125, #This represents the maximum encoded value of the store id, the actuall nr of stores available in the dataset is 110, but this is needed for the nn.Embedding layer to work
-            use_img=bool(args.use_img), 
-            use_att=bool(args.use_att), 
-            use_date=bool(args.use_date),
-            use_trends=bool(args.use_trends),
-            out_len=12
+            use_img=args.use_img,
+            use_teacher_forcing=args.use_teacher_forcing,
+            teacher_forcing_ratio=args.teacher_forcing_ratio,
+            out_len=12, # Demand predicts the full series in one go
         )
     else:
         if args.task_mode == 0:
-            model = CrossAttnRNN21.CrossAttnRNN(
+            model = Model21(
                 attention_dim=args.attention_dim,
                 embedding_dim=args.embedding_dim,
                 hidden_dim=args.hidden_dim,
-                cat_dict=cat_dict, 
-                col_dict=col_dict, 
-                fab_dict=fab_dict,
-                store_num=125, #This represents the maximum encoded value of the store id, the actuall nr of stores available in the dataset is 110, but this is needed for the nn.Embedding layer to work
-                use_img=bool(args.use_img), 
-                use_att=bool(args.use_att), 
-                use_date=bool(args.use_date),
-                use_trends=bool(args.use_trends),
-                task_mode = int(args.task_mode),
-                out_len=10
+                use_img=args.use_img,
+                out_len=args.output_len,
             ) 
         else:
-            model = simple_210.CrossAttnRNN(
+            model = Model210(
                 attention_dim=args.attention_dim,
                 embedding_dim=args.embedding_dim,
                 hidden_dim=args.hidden_dim,
-                cat_dict=cat_dict, 
-                col_dict=col_dict, 
-                fab_dict=fab_dict,
-                store_num=125, #This represents the maximum encoded value of the store id, the actuall nr of stores available in the dataset is 110, but this is needed for the nn.Embedding layer to work
-                use_img=bool(args.use_img), 
-                use_att=bool(args.use_att), 
-                use_date=bool(args.use_date),
-                use_trends=bool(args.use_trends),
-                task_mode = int(args.task_mode),
-                out_len=10
+                use_img=args.use_img,
+                out_len=args.output_len,
+                use_teacher_forcing=args.use_teacher_forcing,
+                teacher_forcing_ratio=args.teacher_forcing_ratio,
             )       
 
     # Define model saving procedure
     dt_string = datetime.now().strftime("%d-%m-%Y-%H-%M-%S")
-    model_savename = args.model_type + "-" + args.wandb_run
+    model_savename = args.wandb_run
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        dirpath=args.ckpt_dir + "/" + args.model_type,
+        dirpath=args.ckpt_dir,
         filename=model_savename + "---{epoch}---" + dt_string,
         monitor="val_mae",
         mode="min",
@@ -176,23 +158,20 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--demand", type=int, default=0,
     help="Boolean variable to optionally use the dataset for the new product demand forecasting task (forecasting without a known past)")
-    
+    parser.add_argument("--quick_debug", action='store_true')
+
      # Model specific arguments
-    parser.add_argument("--model_type", type=str, default="RNN")
-    parser.add_argument("--trend_len", type=int, default=52)
-    parser.add_argument("--num_trends", type=int, default=3)
     parser.add_argument("--embedding_dim", type=int, default=256)
     parser.add_argument("--attention_dim", type=int, default=256)
     parser.add_argument("--hidden_dim", type=int, default=256)
-    parser.add_argument("--output_dim", type=int, default=9)
+    parser.add_argument("--output_len", type=int, default=10)
     parser.add_argument("--num_hidden_layers", type=int, default=1)
-    parser.add_argument("--use_img", type=int, default=1)
-    parser.add_argument("--use_att", type=int, default=0)
-    parser.add_argument("--use_date", type=int, default=0)
-    parser.add_argument("--use_trends", type=int, default=0)
-    parser.add_argument("--task_mode", type=int, default=1, help="0-->2,1 - 1-->2,10")
+    parser.add_argument("--use_img", action='store_true')
+    parser.add_argument("--task_mode", type=int, default=1, help="0-->2-1 - 1-->2-10")
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--gpu_num", type=int, default=1)
+    parser.add_argument("--use_teacher_forcing", action='store_true')
+    parser.add_argument("--teacher_forcing_ratio", type=float, default=0.5)
 
     # wandb arguments
     parser.add_argument("--use_wandb", action='store_true')
@@ -204,8 +183,3 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     run(args)
-
-# python train_dl.py --task_mode 1 --gpu_num 0 --use_wandb --wandb_entity vips4-univr --wandb_project RNN --wandb_run NEW-210-noimg --use_img 0
-# python train_dl.py --task_mode 0 --gpu_num 0 --use_wandb --wandb_entity vips4-univr --wandb_project RNN --wandb_run NEW-21-noimg --use_img 0
-# python train_dl.py --task_mode 1 --gpu_num 0 --use_wandb --wandb_entity vips4-univr --wandb_project RNN --wandb_run NEW-210-img --use_img 1
-# python train_dl.py --task_mode 0 --gpu_num 0 --use_wandb --wandb_entity vips4-univr --wandb_project RNN --wandb_run NEW-210-img --use_img 1

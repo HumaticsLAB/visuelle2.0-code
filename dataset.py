@@ -5,7 +5,7 @@ import numpy as np
 from tqdm import tqdm
 from PIL import Image, ImageFile
 from torch.utils.data import TensorDataset
-from torchvision.transforms import Resize, ToTensor, Normalize, Compose
+from torchvision.transforms import Resize, CenterCrop, ToTensor, Normalize, Compose
 from sklearn.preprocessing import MinMaxScaler
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -48,7 +48,7 @@ class Visuelle2:
         # Define image transformations
         img_transforms = Compose(
             [
-                Resize((256, 256)),
+                Resize((299, 299)), # Inception v3 uses 299x299 images: https://arxiv.org/abs/1512.00567
                 ToTensor(),
                 Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ]
@@ -61,7 +61,7 @@ class Visuelle2:
 
         return self.dataset[idx], pt_img
 
-    def frame_series(self, train_window=3, forecast_horizon=1):
+    def frame_series(self, train_window=2, forecast_horizon=1):
         X, y = [], []
         sales_and_restocks = self.sales_df.copy(deep=True).iloc[:, -13:]
         restocks, sales = (
