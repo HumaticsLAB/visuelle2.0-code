@@ -130,8 +130,6 @@ class CrossAttnRNN(pl.LightningModule):
             lr=None,
         )
 
-        # optimizer = torch.optim.AdamW(self.parameters(), lr=5e-4, weight_decay=1e-6)
-
         return [optimizer]
 
     def on_train_epoch_start(self):
