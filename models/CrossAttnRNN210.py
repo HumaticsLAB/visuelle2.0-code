@@ -25,7 +25,8 @@ class CrossAttnRNN(pl.LightningModule):
         self.use_img = use_img
 
         # Encoder(s)
-        self.image_encoder = ImageEncoder(embedding_dim)
+        # TODO: With and without fine-tuning using correct image embedder
+        self.image_encoder = ImageEncoder(embedding_dim, fine_tune=True)
         self.ts_embedder = nn.GRU(1, embedding_dim, batch_first=True)
 
         # Attention module
@@ -34,10 +35,9 @@ class CrossAttnRNN(pl.LightningModule):
         self.attentive_aggregator2 = nn.Linear((hidden_dim*2) + 1, hidden_dim)
 
         # Decoder
-        # decoder_input_size = hidden_dim+1 if use_img else hidden_dim
-        decoder_input_size = hidden_dim
+        decoder_input_size = hidden_dim+1 if use_img else hidden_dim
         self.decoder_gru = nn.GRU(
-            input_size=decoder_input_size,
+            input_size=hidden_dim,
             hidden_size=hidden_dim,
             batch_first=True
         )
@@ -57,8 +57,8 @@ class CrossAttnRNN(pl.LightningModule):
         y,
         images,
     ):
-        B = X.shape[0]
-        img_attn_weights, multimodal_attn_weights = [], [] # Lists to save attention weights
+        # B = X.shape[0]
+        img_attn_weights = []
         predictions = [] # List to store predictions of dynamically unrolled outputs.
 
         # Encode static input data
@@ -69,36 +69,34 @@ class CrossAttnRNN(pl.LightningModule):
         ts_features = self.ts_embedder(ts_input)[1].permute(1,0,2) # Project ts to higher dim space maintaing temporal information
 
         # Decoder init (first prediction to begin autoregression)
-        decoder_hidden = torch.zeros(1, B, self.hidden_dim).to(X.device)
         if self.use_img:
-            # Image attention (applied only when necessary)
-            attended_img_encoding, img_alpha = self.img_attention(
-                img_encoding, decoder_hidden
-            )
-            img_attn_weights.append(img_alpha)
-            attended_img_encoding = attended_img_encoding.sum(1) # Reduce image features via attentive weighted mean
-            x = torch.cat([X[:, 0, -1].unsqueeze(-1), attended_img_encoding], dim=-1).unsqueeze(1) # attach last pred to novel image features
-            x = self.attentive_aggregator1(x)
+            x = img_encoding.sum(1, keepdim=True) + ts_features
         else:
             x = ts_features
 
-        decoder_out, decoder_hidden = self.decoder_gru(x, decoder_hidden)
+        decoder_out, decoder_hidden = self.decoder_gru(x)
         pred = self.decoder_fc(decoder_out).squeeze(-1)
          
-        # Insert the first prediction and multi-modal attention result.
+        # Insert the first prediction
         predictions.append(pred)
 
         # Autoregressive rolling forecast
         for t in range(1, self.out_len):
             # Image attention (applied only when necessary)
             if self.use_img:
-                attended_img_encoding, img_alpha = self.img_attention(
-                    img_encoding, decoder_hidden
-                )
+                if t==1:
+                    attended_img_encoding, img_alpha = self.img_attention(
+                        img_encoding, decoder_hidden
+                    )
+                else:
+                    attended_img_encoding, img_alpha = self.img_attention(
+                        attended_img_encoding, decoder_hidden
+                    )
                 img_attn_weights.append(img_alpha)
-                attended_img_encoding = attended_img_encoding.sum(1) # Reduce image features via attentive weighted mean
-                x = torch.cat([pred.unsqueeze(1), decoder_out, attended_img_encoding.unsqueeze(1)], dim=-1) # attach last pred to novel image features
-                x = self.attentive_aggregator2(x)
+                attended_img_encoding = attended_img_encoding.sum(1, keepdim=True) # Reduce image features via attentive weighted mean
+                final_img_encoding = img_encoding.sum(1, keepdim=True) + attended_img_encoding # Attn residual
+                # x = torch.cat([decoder_out, final_img_encoding], dim=-1)
+                x = final_img_encoding + decoder_out
             else:
                 x = decoder_out                
                 
@@ -119,7 +117,7 @@ class CrossAttnRNN(pl.LightningModule):
          # Convert the RNN output to a single prediction.
         outputs = torch.stack(predictions).squeeze().T
 
-        return outputs, img_attn_weights, multimodal_attn_weights
+        return outputs, img_attn_weights
 
     def configure_optimizers(self):
         optimizer = Adafactor(
@@ -137,7 +135,7 @@ class CrossAttnRNN(pl.LightningModule):
 
     def training_step(self, train_batch, batch_idx):
         (X, y, _, _, _, _, _, _), images = train_batch
-        forecasted_sales, _, _ = self.forward(
+        forecasted_sales, _ = self.forward(
             X,
             y,
             images
@@ -153,7 +151,7 @@ class CrossAttnRNN(pl.LightningModule):
 
     def validation_step(self, test_batch, batch_idx):
         (X, y, _, _, _, _, _, _), images = test_batch
-        forecasted_sales, _, _ = self.forward(
+        forecasted_sales, _ = self.forward(
             X,
             y,
             images,

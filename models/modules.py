@@ -66,14 +66,14 @@ class ImageEncoder(nn.Module):
     def __init__(self, embedding_dim, fine_tune=False):
         super(ImageEncoder, self).__init__()
 
-        self.cnn = models.inception_v3(pretrained=True)
+        self.cnn = models.inception_v3(pretrained=True, aux_logits=False)
 
         # Last 3 layers to identity otherwise this model won't work :(
         self.cnn.avgpool = nn.Identity()
         self.cnn.dropout = nn.Identity()
         self.cnn.fc = nn.Identity()
 
-        for p in self.cnn.parameters():  # freeze all of the network
+        for p in self.cnn.parameters():  # freeze all of the network (or not)
             p.requires_grad = False
 
         # Fine tune cnn (calculate gradients for backprop on last two bottlenecks)
@@ -87,16 +87,11 @@ class ImageEncoder(nn.Module):
 
 
     def forward(self, x):
-        output = self.cnn(x)
-        if len(output) > 1:
-            x = output[0]
-        else:
-            x = output
+        out = self.cnn(x)
+        out = out.reshape(-1, 64, 2048)
+        out = self.dropout(self.fc(out))
 
-        x = x.reshape(-1, 64, 2048)
-        x = self.dropout(self.fc(x))
-
-        return x
+        return out
 
 
 class AdditiveAttention(nn.Module):  # Bahdanau encoder-decoder attention (Additive attention)
