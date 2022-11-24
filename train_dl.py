@@ -166,7 +166,7 @@ if __name__ == "__main__":
     parser.add_argument("--hidden_dim", type=int, default=64)
     parser.add_argument("--output_len", type=int, default=10)
     parser.add_argument("--num_hidden_layers", type=int, default=1)
-    parser.add_argument("--use_img", type=bool, default=False)#, action='store_true')
+    parser.add_argument("--use_img", type=bool, default=False)
     parser.add_argument("--task_mode", type=int, default=1, help="0-->2-1 - 1-->2-10")
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--gpu_num", type=int, default=1)

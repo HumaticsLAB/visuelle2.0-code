@@ -24,8 +24,7 @@ class CrossAttnRNN(pl.LightningModule):
         self.embedding_dim = embedding_dim
         self.use_img = use_img
 
-        # Encoder(s)
-        # TODO: With and without fine-tuning using correct image embedder
+        # Encoders
         self.image_encoder = ImageEncoder(embedding_dim, fine_tune=True)
         self.ts_embedder = nn.GRU(1, embedding_dim, batch_first=True)
 
@@ -35,7 +34,6 @@ class CrossAttnRNN(pl.LightningModule):
         self.attentive_aggregator2 = nn.Linear((hidden_dim*2) + 1, hidden_dim)
 
         # Decoder
-        decoder_input_size = hidden_dim+1 if use_img else hidden_dim
         self.decoder_gru = nn.GRU(
             input_size=hidden_dim,
             hidden_size=hidden_dim,
@@ -96,7 +94,6 @@ class CrossAttnRNN(pl.LightningModule):
                 img_attn_weights.append(img_alpha)
                 attended_img_encoding = attended_img_encoding.sum(1, keepdim=True) # Reduce image features via attentive weighted mean
                 final_img_encoding = img_encoding.sum(1, keepdim=True) + attended_img_encoding # Attn residual
-                # x = torch.cat([decoder_out, final_img_encoding], dim=-1)
                 x = final_img_encoding + decoder_out
             else:
                 x = decoder_out                
