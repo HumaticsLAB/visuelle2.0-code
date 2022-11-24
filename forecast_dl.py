@@ -5,8 +5,10 @@ import pandas as pd
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 import numpy as np
-from models import CrossAttnRNN210, CrossAttnRNNDemand
 from dataset import Visuelle2
+from models.CrossAttnRNN21 import CrossAttnRNN as Model21
+from models.CrossAttnRNN210 import CrossAttnRNN as Model210
+from models.CrossAttnRNNDemand import CrossAttnRNN as DemandModel
 from tqdm import tqdm
 from utils import calc_error_metrics
 
@@ -35,7 +37,7 @@ def run(args):
     demand = bool(args.new_product)
     img_folder = os.path.join(args.dataset_path, 'images')
 
-    visuelle_pt_test = "visuelle2_test_processed_demand.pt" if demand else "visuelle2_test_processed_stfore_2.pt"
+    visuelle_pt_test = "visuelle2_test_processed_demand.pt" if demand else "visuelle2_test_processed_stfore.pt"
 
     # Create (PyTorch) dataset objects
     testset = Visuelle2(
@@ -45,7 +47,7 @@ def run(args):
         cat_dict,
         col_dict,
         fab_dict,
-        args.trend_len,
+        52,
         demand,
         local_savepath=os.path.join(args.dataset_path, visuelle_pt_test)
     )
@@ -63,7 +65,7 @@ def run(args):
     # Load model
     model_savename = args.ckpt_path
     if demand:
-        model = CrossAttnRNNDemand.CrossAttnRNN(
+        model = DemandModel(
             attention_dim=args.attention_dim,
             embedding_dim=args.embedding_dim,
             hidden_dim=args.hidden_dim,
@@ -79,31 +81,36 @@ def run(args):
             out_len=12
         ).load_from_checkpoint(model_savename)
     else:
-        model = CrossAttnRNN210.CrossAttnRNN(
-            attention_dim=args.attention_dim,
-            embedding_dim=args.embedding_dim,
-            hidden_dim=args.hidden_dim,
-            cat_dict=cat_dict, 
-            col_dict=col_dict, 
-            fab_dict=fab_dict,
-            store_num=125, #This represents the maximum encoded value of the store id, the actuall nr of stores available in the dataset is 110, but this is needed for the nn.Embedding layer to work
-            use_img=bool(args.use_img), 
-            use_att=bool(args.use_att), 
-            use_date=bool(args.use_date),
-            use_trends=bool(args.use_trends),
-            task_mode = int(args.task_mode),
-            out_len=10
-        ).load_from_checkpoint(model_savename) 
-        
+        if args.task_mode == 0:
+            model = Model21(
+                attention_dim=args.attention_dim,
+                embedding_dim=args.embedding_dim,
+                hidden_dim=args.hidden_dim,
+                use_img=args.use_img,
+                out_len=args.output_len,
+            )
+        else:
+            model = Model210(
+                attention_dim=args.attention_dim,
+                embedding_dim=args.embedding_dim,
+                hidden_dim=args.hidden_dim,
+                use_img=args.use_img,
+                out_len=args.output_len,
+                use_teacher_forcing=args.use_teacher_forcing,
+                teacher_forcing_ratio=args.teacher_forcing_ratio,
+            )
 
-    model.to('cuda:'+args.gpu_num) 
+        
+    model.load_state_dict(torch.load(model_savename)['state_dict'])
+    model.to('cuda:'+str(args.gpu_num)) 
+    model.eval()
 
     gt, forecasts = [], []
     for data in tqdm(testloader, total=len(testloader)):
         with torch.no_grad():
             (X, y, categories, colors, fabrics, stores, temporal_features, gtrends), images = data
-            X, y, categories, colors, fabrics, stores, temporal_features, gtrends, images = X.to("cuda:"+args.gpu_num), y.to("cuda:"+args.gpu_num), categories.to("cuda:"+args.gpu_num), colors.to("cuda:"+args.gpu_num), fabrics.to("cuda:"+args.gpu_num), stores.to("cuda:"+args.gpu_num), temporal_features.to("cuda:"+args.gpu_num), gtrends.to("cuda:"+args.gpu_num), images.to("cuda:"+args.gpu_num)
-            y_hat, _, _ = model(X, y, categories, colors, fabrics, stores, temporal_features, gtrends, images)
+            X, y, images = X.to("cuda:"+str(args.gpu_num)), y.to("cuda:"+str(args.gpu_num)), images.to("cuda:"+str(args.gpu_num))
+            y_hat, _ = model(X, y, images)
             forecasts.append(y_hat)
             gt.append(y)
 
@@ -113,7 +120,6 @@ def run(args):
         torch.cat(forecasts).squeeze().detach().cpu().numpy() * norm_scalar,
     )
     mae, wape = calc_error_metrics(gt, forecasts)
-    print(f"Results for {args.method}")
     print(f"{wape},{mae}")
 
 
@@ -125,25 +131,22 @@ if __name__ == "__main__":
     parser.add_argument("--new_product", type=int, default=0,
     help="Boolean variable to optionally use the dataset for the new product demand forecasting task (forecasting without a known past)")
     
-     # Model specific arguments
-    parser.add_argument("--model_type", type=str, default="RNN")
-    parser.add_argument("--trend_len", type=int, default=52)
-    parser.add_argument("--num_trends", type=int, default=3)
-    parser.add_argument("--embedding_dim", type=int, default=300)
-    parser.add_argument("--attention_dim", type=int, default=300)
-    parser.add_argument("--hidden_dim", type=int, default=256)
-    parser.add_argument("--output_dim", type=int, default=9)
+    # Model specific arguments
+    parser.add_argument("--embedding_dim", type=int, default=64)
+    parser.add_argument("--attention_dim", type=int, default=64)
+    parser.add_argument("--hidden_dim", type=int, default=64)
+    parser.add_argument("--output_len", type=int, default=10)
     parser.add_argument("--num_hidden_layers", type=int, default=1)
-    parser.add_argument("--use_img", type=int, default=0)
-    parser.add_argument("--use_att", type=int, default=0)
-    parser.add_argument("--use_date", type=int, default=0)
-    parser.add_argument("--use_trends", type=int, default=0)
-    parser.add_argument("--task_mode", type=int, default=1, help="0-->2,1 - 1-->2,10")
+    parser.add_argument("--use_img", type=bool, default=True)# action='store_true')
+    parser.add_argument("--task_mode", type=int, default=1, help="0-->2-1 - 1-->2-10")
+    parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--gpu_num", type=int, default=0)
+    parser.add_argument("--use_teacher_forcing", action='store_true')
+    parser.add_argument("--teacher_forcing_ratio", type=float, default=0.3)
 
     # wandb arguments
-    parser.add_argument("--ckpt_path", type=str, default="ckpt/model.ckpt")
-
+    parser.add_argument("--ckpt_path", type=str, default="lightning_logs/version_7/checkpoints/epoch=13-step=10527.ckpt")
+# ckpt/---epoch=3---24-11-2022-10-04-07.ckpt")#
     
     args = parser.parse_args()
     run(args)

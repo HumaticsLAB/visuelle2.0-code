@@ -3,3 +3,6 @@ __pycache__/
 ckpt/
 wandb/
 .vscode/
+visuelle2/
+lightning_logs/
+*_optuna*

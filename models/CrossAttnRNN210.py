@@ -39,13 +39,14 @@ class CrossAttnRNN(pl.LightningModule):
         self.decoder_gru = nn.GRU(
             input_size=hidden_dim,
             hidden_size=hidden_dim,
+            num_layers= 3,
             batch_first=True
         )
 
         self.decoder_fc = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim//2),
             nn.ReLU(),
-            nn.Dropout(0.2),
+            nn.Dropout(0.3),
             nn.Linear(hidden_dim//2, 1)
         )
 
@@ -86,11 +87,11 @@ class CrossAttnRNN(pl.LightningModule):
             if self.use_img:
                 if t==1:
                     attended_img_encoding, img_alpha = self.img_attention(
-                        img_encoding, decoder_hidden
+                        img_encoding, decoder_hidden[-1,:,:].unsqueeze(0)
                     )
                 else:
                     attended_img_encoding, img_alpha = self.img_attention(
-                        attended_img_encoding, decoder_hidden
+                        attended_img_encoding, decoder_hidden[-1,:,:].unsqueeze(0)
                     )
                 img_attn_weights.append(img_alpha)
                 attended_img_encoding = attended_img_encoding.sum(1, keepdim=True) # Reduce image features via attentive weighted mean

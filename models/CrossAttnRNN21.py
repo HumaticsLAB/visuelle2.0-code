@@ -12,15 +12,7 @@ class CrossAttnRNN(pl.LightningModule):
         attention_dim,
         embedding_dim,
         hidden_dim,
-        cat_dict,
-        col_dict,
-        fab_dict,
-        store_num,
         use_img,
-        use_att,
-        use_date,
-        use_trends,
-        task_mode,
         out_len,
         use_teacher_forcing=False,
         teacher_forcing_ratio=0.5,
@@ -32,9 +24,6 @@ class CrossAttnRNN(pl.LightningModule):
         self.hidden_dim = hidden_dim
         self.embedding_dim = embedding_dim
         self.use_img = use_img
-        self.use_att = use_att
-        self.use_date = use_date
-        self.use_trends = use_trends
 
         # Encoder(s)
         self.image_encoder = ImageEncoder(embedding_dim)

@@ -126,9 +126,9 @@ def run(args):
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         dirpath=args.ckpt_dir,
         filename=model_savename + "---{epoch}---" + dt_string,
-        monitor="val_mae",
+        monitor="val_wWAPE",
         mode="min",
-        save_top_k=1,
+        save_top_k=2,
     )
 
     if args.use_wandb:
@@ -153,7 +153,7 @@ def run(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset_path", type=str, default='/media/data/gskenderi/visuelle2/')
+    parser.add_argument("--dataset_path", type=str, default='visuelle2/')
     parser.add_argument("--seed", type=int, default=21)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--demand", type=int, default=0,
@@ -161,14 +161,14 @@ if __name__ == "__main__":
     parser.add_argument("--quick_debug", action='store_true')
 
      # Model specific arguments
-    parser.add_argument("--embedding_dim", type=int, default=256)
-    parser.add_argument("--attention_dim", type=int, default=256)
-    parser.add_argument("--hidden_dim", type=int, default=256)
+    parser.add_argument("--embedding_dim", type=int, default=64)
+    parser.add_argument("--attention_dim", type=int, default=64)
+    parser.add_argument("--hidden_dim", type=int, default=64)
     parser.add_argument("--output_len", type=int, default=10)
     parser.add_argument("--num_hidden_layers", type=int, default=1)
-    parser.add_argument("--use_img", action='store_true')
+    parser.add_argument("--use_img", type=bool, default=False)#, action='store_true')
     parser.add_argument("--task_mode", type=int, default=1, help="0-->2-1 - 1-->2-10")
-    parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--gpu_num", type=int, default=1)
     parser.add_argument("--use_teacher_forcing", action='store_true')
     parser.add_argument("--teacher_forcing_ratio", type=float, default=0.5)
