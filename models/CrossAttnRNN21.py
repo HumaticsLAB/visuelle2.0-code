@@ -59,7 +59,7 @@ class CrossAttnRNN(pl.LightningModule):
         outputs = self.decoder(x)
         outputs = outputs.reshape(bs, num_ts_splits, -1) # Produce in outputs in the form of BS X Num_predictions X 1
 
-        return outputs
+        return outputs, None
 
     def configure_optimizers(self):
         optimizer = Adafactor(
@@ -74,7 +74,7 @@ class CrossAttnRNN(pl.LightningModule):
 
     def training_step(self, train_batch, batch_idx):
         (X, y, _, _, _, _, _, _), images = train_batch
-        forecasted_sales = self.forward(
+        forecasted_sales, _ = self.forward(
             X,
             y,
             images
@@ -88,7 +88,7 @@ class CrossAttnRNN(pl.LightningModule):
 
     def validation_step(self, test_batch, batch_idx):
         (X, y, _, _, _, _, _, _), images = test_batch
-        forecasted_sales = self.forward(
+        forecasted_sales, _ = self.forward(
             X,
             y,
             images,
