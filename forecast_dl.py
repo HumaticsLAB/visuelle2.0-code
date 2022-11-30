@@ -108,7 +108,7 @@ def run(args):
     gt, forecasts = [], []
     for data in tqdm(testloader, total=len(testloader)):
         with torch.no_grad():
-            (X, y, categories, colors, fabrics, stores, temporal_features, gtrends), images = data
+            (X, y, _, _, _, _, _, gtrends), images = data
             X, y, images = X.to("cuda:"+str(args.gpu_num)), y.to("cuda:"+str(args.gpu_num)), images.to("cuda:"+str(args.gpu_num))
             y_hat, _ = model(X, y, images)
             forecasts.append(y_hat)
@@ -132,21 +132,19 @@ if __name__ == "__main__":
     help="Boolean variable to optionally use the dataset for the new product demand forecasting task (forecasting without a known past)")
     
     # Model specific arguments
-    parser.add_argument("--embedding_dim", type=int, default=64)
-    parser.add_argument("--attention_dim", type=int, default=64)
-    parser.add_argument("--hidden_dim", type=int, default=64)
+    parser.add_argument("--embedding_dim", type=int, default=512)
+    parser.add_argument("--attention_dim", type=int, default=512)
+    parser.add_argument("--hidden_dim", type=int, default=512)
     parser.add_argument("--output_len", type=int, default=10)
-    parser.add_argument("--num_hidden_layers", type=int, default=1)
-    parser.add_argument("--use_img", type=bool, default=True)# action='store_true')
-    parser.add_argument("--task_mode", type=int, default=1, help="0-->2-1 - 1-->2-10")
+    parser.add_argument("--use_img", type=bool, default=True)
+    parser.add_argument("--task_mode", type=int, default=0, help="0-->2-1 - 1-->2-10")
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--gpu_num", type=int, default=0)
     parser.add_argument("--use_teacher_forcing", action='store_true')
     parser.add_argument("--teacher_forcing_ratio", type=float, default=0.3)
 
     # wandb arguments
-    parser.add_argument("--ckpt_path", type=str, default="lightning_logs/version_7/checkpoints/epoch=13-step=10527.ckpt")
-# ckpt/---epoch=3---24-11-2022-10-04-07.ckpt")#
+    parser.add_argument("--ckpt_path", type=str, default="ckpt/model.ckpt")
     
     args = parser.parse_args()
     run(args)
