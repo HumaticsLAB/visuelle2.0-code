@@ -54,6 +54,8 @@ python forecast_dl.py --task_mode 1 --ckpt_path <ckpt_path>
 python train_dl.py --new_product 1
 python forecast_dl.py --new_product 1 --ckpt_path <ckpt_path>
 ```
+## Model zoo
+You can find the pretrained models [here](bit.ly/3iu2YyL).
 
 ## Citation
 If you use the **VISUELLE2.0** dataset or this particular implementation, please cite the following paper:
